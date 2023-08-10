@@ -6,6 +6,7 @@ use num;
 use num_derive::FromPrimitive;
 use strum_macros::Display;
 use crate::types::NodeType::*;
+use crate::utils;
 
 // PROOF_FLAGS_LEN is the byte length of the flags in the proof header
 // (first 32 bytes).
@@ -492,54 +493,59 @@ impl<H: Hashable, DB: ZktrieDatabase> ZkTrieImpl<H, DB> {
         }?;
         let root = final_root.expect("finalRoot is not set yet");
         self.root_hash = root;
-        self.dbInsert(DBKEY_ROOT_NODE, DBEntryTypeRoot, mt.root_hash)
-}
-
-// recalculatePathUntilRoot recalculates the nodes until the Root
-    pub fn (mt *ZkTrieImpl) recalculate_path_until_root(path Vec<bool>, pathTypes []NodeType,
-    node *Node, siblings []*zkt.Hash) (*zkt.Hash, error) {
-    for i = len(siblings) - 1; i >= 0; i-- {
-        nodeHash, err = node.NodeHash()
-        if err != nil {
-            return nil, err
-        }
-        if path[i] {
-            node = NewParentNode(pathTypes[i], siblings[i], nodeHash)
-        } else {
-            node = NewParentNode(pathTypes[i], nodeHash, siblings[i])
-        }
-        _, err = mt.add_node(node)
-        if err != ErrNodeKeyAlreadyExists && err != nil {
-            return nil, err
-        }
+        self.db_insert(DBKEY_ROOT_NODE, DBEntryTypeRoot, mt.root_hash)
     }
 
-    // return last node added, which is the root
-    nodeHash, err = node.NodeHash()
-    return nodeHash, err
-}
-
-// dbInsert is a helper     pub fntion to insert a node : u32o a key in an open db
-// transaction.
-    pub fn (mt *ZkTrieImpl) dbInsert(k []byte, t NodeType, data []byte) error {
-    v = append([]byte{byte(t)}, data...)
-    return mt.db.Put(k, v)
-}
-
-// get_leaf_node is more underlying method than TryGet, which obtain an leaf node
-// or nil if not exist
-    pub fn get_leaf_node(node_key: &H) -> Result<Node<H>, ImplError> {
-    n, _, err = mt.tryGet(node_key)
-    return n, err
-}
-
-// get_path returns the binary path, from the root to the leaf.
-    pub fn get_path(num_levels: u32, k []byte) -> Vec<bool> {
-        path = make(Vec<bool>, num_levels)
-        for n = 0; n < num_levels; n++ {
-            path[n] = zkt.TestBit(k[:], u: u32(n))
+// recalculatePathUntilRoot recalculates the nodes until the Root
+    pub fn recalculate_path_until_root(
+        path: Vec<bool>,
+        path_types: Vec<NodeType>,
+        node: &Node<H>,
+        siblings: Vec<H>
+    ) -> Result<H, ImplError> {
+        let mut node = node.clone();
+        let mut sib_rev = siblings.clone();
+        sib_rev.reverse();
+        for i = len(siblings) - 1; i >= 0; i-- {
+            nodeHash, err = node.NodeHash()
+            if err != nil {
+                return nil, err
+            }
+            if path[i] {
+                node = NewParentNode(pathTypes[i], siblings[i], nodeHash)
+            } else {
+                node = NewParentNode(pathTypes[i], nodeHash, siblings[i])
+            }
+            _, err = mt.add_node(node)
+            if err != ErrNodeKeyAlreadyExists && err != nil {
+                return nil, err
+            }
         }
-        return path
+    
+        // return last node added, which is the root
+        node.node_hash()
+    }
+
+    // dbInsert is a helper pub fntion to insert a node : u32o a key in an open db
+    // transaction.
+    pub fn db_insert(&mut self, k: Vec<u8>, t: NodeType, data: Vec<u8>) Result<(), ImplError> {
+        let v = data.clone().insert(t as u8, 0);
+        return mt.db.Put(k, v)
+    }
+
+    // get_leaf_node is more underlying method than TryGet, which obtain an leaf node
+    // or nil if not exist
+    pub fn get_leaf_node(&mut self, node_key: &H) -> Result<Node<H>, ImplError> {
+        self.try_Get(node_key)
+    }
+
+    // get_path returns the binary path, from the root to the leaf.
+    pub fn get_path(num_levels: u32, data: Vec<u8>) -> Vec<bool> {
+        path = vec![];
+        for n in 0..num_levels {
+            path.push(utils::test_bit(data, n))
+        }
+        pash
     }
 }
 
